@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v20d</title>
+<title>Hex Mapping Prototype v20c</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -269,7 +269,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v20d</h1>
+    <h1>Hex Mapping Prototype v20c</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -996,12 +996,6 @@ function pointAlong(a, b, t) {
   };
 }
 
-function cutTipTriangle(tip, pointA, pointB, cut = 0.18) {
-  const cutA = pointAlong(tip, pointA, cut);
-  const cutB = pointAlong(tip, pointB, cut);
-  return [cutA, pointA, pointB, cutB];
-}
-
 function edgeBlendPolygon(hex, edgeName) {
   const center = centerOf(hex.col, hex.row);
   const pts = hexPoints(center.x, center.y);
@@ -1062,7 +1056,7 @@ function outsideCornerPatchCandidate(hex, leftEdgeIndex) {
     const leftPoly = edgeBlendPolygon(hex, EDGE_NAMES[leftEdgeIndex]);
     candidates.push({
       baseTerrain: leftNeighbor.baseTerrain,
-      polygon: cutTipTriangle(shared, pointAlong(shared, next, 0.34), leftPoly[2], 0.18)
+      polygon: [shared, pointAlong(shared, next, 0.34), leftPoly[2]]
     });
   }
 
@@ -1072,7 +1066,7 @@ function outsideCornerPatchCandidate(hex, leftEdgeIndex) {
     const rightPoly = edgeBlendPolygon(hex, EDGE_NAMES[rightEdgeIndex]);
     candidates.push({
       baseTerrain: rightNeighbor.baseTerrain,
-      polygon: cutTipTriangle(shared, rightPoly[4], pointAlong(shared, previous, 0.34), 0.18)
+      polygon: [shared, rightPoly[4], pointAlong(shared, previous, 0.34)]
     });
   }
 
