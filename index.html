@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v20</title>
+<title>Hex Mapping Prototype v20b</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -269,7 +269,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v20</h1>
+    <h1>Hex Mapping Prototype v20b</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -437,8 +437,8 @@ const TERRAIN = [
 
 
 const BASE_TERRAINS = [
-  { id: "deep_sea", label: "Deep Sea", color: "#12374f" },
-  { id: "sea", label: "Sea", color: "#2e6f8f" },
+  { id: "deep_sea", label: "Deep Sea", color: "#0b263a" },
+  { id: "sea", label: "Sea", color: "#245f82" },
   { id: "coastal_water", label: "Coastal Water", color: "#4a91ab" },
   { id: "inland_water", label: "Inland Water", color: "#79b8c8" },
   { id: "beach", label: "Beach", color: "#dbc487" },
@@ -989,6 +989,13 @@ function midpoint(a, b) {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
+function pointAlong(a, b, t) {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t
+  };
+}
+
 function edgeBlendPolygon(hex, edgeName) {
   const center = centerOf(hex.col, hex.row);
   const pts = hexPoints(center.x, center.y);
@@ -1030,13 +1037,20 @@ function chooseCornerBlendBase(neighborA, neighborB) {
 function cornerBlendPolygon(hex, edgeIndexA) {
   const center = centerOf(hex.col, hex.row);
   const pts = hexPoints(center.x, center.y);
-  const shared = pts[(edgeIndexA + 1) % 6];
-  const edgeA = edgeBlendPolygon(hex, EDGE_NAMES[edgeIndexA]);
-  const edgeB = edgeBlendPolygon(hex, EDGE_NAMES[(edgeIndexA + 1) % 6]);
 
-  // Small connector patch that bridges the gap between adjacent edge wedges.
-  const inwardShared = inwardPoint(shared, center, 0.29);
-  return [shared, edgeA[2], inwardShared, edgeB[4]];
+  const previous = pts[edgeIndexA];
+  const shared = pts[(edgeIndexA + 1) % 6];
+  const next = pts[(edgeIndexA + 2) % 6];
+
+  // Visible corner-sector patch:
+  // a small kite/triangle inside the hex corner, spanning from one adjacent
+  // edge band to the other. This fills the outside-corner gap that the edge
+  // wedges alone can leave.
+  const alongPreviousEdge = pointAlong(shared, previous, 0.34);
+  const alongNextEdge = pointAlong(shared, next, 0.34);
+  const inwardShared = inwardPoint(shared, center, 0.36);
+
+  return [shared, alongNextEdge, inwardShared, alongPreviousEdge];
 }
 
 function renderEdgeBlendForHex(hex) {
@@ -1072,7 +1086,7 @@ function renderEdgeBlendForHex(hex) {
     const patch = svgElement("polygon", {
       points: pointsString(cornerBlendPolygon(hex, edgeIndex)),
       fill: chosenTerrain.color,
-      opacity: "0.17",
+      opacity: "0.22",
       class: "edge-blend corner-blend"
     });
     svg.appendChild(patch);
