@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v19</title>
+<title>Hex Mapping Prototype v20</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -269,7 +269,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v19</h1>
+    <h1>Hex Mapping Prototype v20</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -333,7 +333,7 @@
 
     <h2>Feature Array</h2>
     <div id="terrain-feature-list"></div><button id="clear-features-button">Clear Features</button>
-    <p class="small">Feature choices are filtered by base terrain. You can stack compatible features such as Mountains + Forest + Mist.</p>
+    <p class="small">Feature choices are filtered by base terrain. You can stack compatible features such as Mountains + Forest + Mist. Edge bleed uses the original v17 wedges plus low-opacity corner patches with a fixed terrain-priority hierarchy.</p>
 
     <h2>POI Type</h2>
     <select id="poi-type"></select>
@@ -408,7 +408,7 @@ const EDGE_NAMES = ["E", "SE", "SW", "W", "NW", "NE"];
 const TERRAIN = [
   { id: "deep_sea", label: "Deep Sea", color: "#14384f", aliases: ["Deep Sea", "Ocean"] },
   { id: "sea", label: "Sea", color: "#2e6e8f", aliases: ["Sea"] },
-  { id: "shallow_water", label: "Inland Water", color: "#4d91a8", aliases: ["Inland Water", "Inland Waters"] },
+  { id: "inland_water", label: "Inland Water", color: "#4d91a8", aliases: ["Inland Water", "Inland Waters"] },
   { id: "beach", label: "Beach", color: "#dbc487", aliases: ["Beach"] },
   { id: "plains", label: "Plains", color: "#c1b06d", aliases: ["Plains"] },
   { id: "grassland", label: "Grassland", color: "#8fa75f", aliases: ["Grassland"] },
@@ -437,10 +437,10 @@ const TERRAIN = [
 
 
 const BASE_TERRAINS = [
-  { id: "deep_sea", label: "Deep Sea", color: "#10324b" },
-  { id: "shallow_sea", label: "Shallow Sea", color: "#2f7491" },
-  { id: "deep_water", label: "Deep Water", color: "#245b78" },
-  { id: "shallow_water", label: "Shallow Water", color: "#5a9fb3" },
+  { id: "deep_sea", label: "Deep Sea", color: "#12374f" },
+  { id: "sea", label: "Sea", color: "#2e6f8f" },
+  { id: "coastal_water", label: "Coastal Water", color: "#4a91ab" },
+  { id: "inland_water", label: "Inland Water", color: "#79b8c8" },
   { id: "beach", label: "Beach", color: "#dbc487" },
   { id: "plains", label: "Plains", color: "#c1b06d" },
   { id: "grassland", label: "Grassland", color: "#8fa75f" },
@@ -490,9 +490,9 @@ const featureById = Object.fromEntries(TERRAIN_FEATURES.map(f => [f.id, f]));
 
 const VALID_FEATURES_BY_BASE = {
   deep_sea: ["waves", "mist", "kelp", "whirlpool", "ice"],
-  shallow_sea: ["waves", "mist", "reef", "shoals", "water_rocks", "kelp", "ice"],
-  deep_water: ["waves", "mist", "kelp", "water_rocks", "whirlpool", "ice"],
-  shallow_water: ["waves", "mist", "shoals", "water_rocks", "rapids", "falls", "marsh", "ice"],
+  sea: ["waves", "mist", "reef", "shoals", "water_rocks", "kelp", "ice"],
+  coastal_water: ["waves", "mist", "kelp", "water_rocks", "whirlpool", "ice"],
+  inland_water: ["waves", "mist", "shoals", "water_rocks", "rapids", "falls", "marsh", "ice"],
 
   beach: ["ridges", "cliffs", "mist", "water_rocks"],
   plains: ["woods", "shrub", "ridges", "farmland", "lone_mountain", "mist"],
@@ -512,10 +512,11 @@ const VALID_FEATURES_BY_BASE = {
 
 const LEGACY_TERRAIN_TO_COMBO = {
   "Deep Sea": ["deep_sea", []],
-  "Ocean": ["deep_water", []],
-  "Sea": ["shallow_sea", []],
-  "Inland Waters": ["shallow_water", []],
-  "Inland Water": ["shallow_water", []],
+  "Ocean": ["sea", []],
+  "Sea": ["coastal_water", []],
+  "Inland Waters": ["inland_water", []],
+  "Inland Water": ["inland_water", []],
+  "Coastal Water": ["coastal_water", []],
   "Beach": ["beach", []],
 
   "Plains": ["plains", []],
@@ -564,6 +565,27 @@ const FEATURE_RENDER_ORDER = [
   "snowcap",
   "mist"
 ];
+
+const BLEED_PRIORITY = {
+  deep_sea: 100,
+  sea: 90,
+  coastal_water: 80,
+  inland_water: 70,
+  rock: 65,
+  snow: 63,
+  wastes: 61,
+  bleak_barrens: 58,
+  barrens: 56,
+  deep_desert: 52,
+  desert: 50,
+  wetland: 46,
+  jungle_floor: 42,
+  lush_grassland: 38,
+  grassland: 34,
+  plains: 30,
+  beach: 20
+};
+
 
 function getValidFeaturesForBase(baseId) {
   return VALID_FEATURES_BY_BASE[baseId] || [];
@@ -614,7 +636,7 @@ function getTerrainDisplayName(baseId, featuresInput = []) {
 
   if (!features.length) return base;
 
-  if (["deep_sea", "shallow_sea", "deep_water", "shallow_water"].includes(baseId)) {
+  if (["deep_sea", "sea", "coastal_water", "inland_water"].includes(baseId)) {
     if (has("whirlpool")) return prefix("Whirlpool");
     if (has("falls")) return prefix("Falls");
     if (has("rapids")) return prefix("Rapids");
@@ -622,8 +644,8 @@ function getTerrainDisplayName(baseId, featuresInput = []) {
     if (has("shoals")) return prefix("Shoals");
     if (has("water_rocks")) return prefix("Rocky Waters");
     if (has("kelp")) return prefix("Kelp Beds");
-    if (has("ice")) return prefix("Frozen Water");
-    if (has("waves")) return prefix(baseId === "deep_sea" ? "Rough Deep Sea" : baseId === "shallow_sea" ? "Rough Sea" : "Rough Water");
+    if (has("ice")) return prefix(baseId === "deep_sea" ? "Frozen Deep Sea" : baseId === "sea" ? "Frozen Sea" : baseId === "coastal_water" ? "Frozen Coastal Water" : "Frozen Inland Water");
+    if (has("waves")) return prefix(baseId === "deep_sea" ? "Rough Deep Sea" : baseId === "sea" ? "Rough Sea" : baseId === "coastal_water" ? "Rough Coastal Water" : "Rough Inland Water");
     return misty ? prefix(base) : base;
   }
 
@@ -967,42 +989,20 @@ function midpoint(a, b) {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
-function pointAlong(a, b, t) {
-  return {
-    x: a.x + (b.x - a.x) * t,
-    y: a.y + (b.y - a.y) * t
-  };
-}
-
-function pointAlong(a, b, t) {
-  return {
-    x: a.x + (b.x - a.x) * t,
-    y: a.y + (b.y - a.y) * t
-  };
-}
-
-
 function edgeBlendPolygon(hex, edgeName) {
   const center = centerOf(hex.col, hex.row);
-  const outer = hexPoints(center.x, center.y);
+  const pts = hexPoints(center.x, center.y);
   const index = EDGE_NAMES.indexOf(edgeName);
+  const a = pts[index];
+  const b = pts[(index + 1) % 6];
+  const mid = midpoint(a, b);
 
-  const a = outer[index];
-  const b = outer[(index + 1) % 6];
+  // Keep the original v17-style wider, slightly shallower bleed wedge.
+  const ai = inwardPoint(a, center, 0.22);
+  const bi = inwardPoint(b, center, 0.22);
+  const mi = inwardPoint(mid, center, 0.30);
 
-  // Reverse-trapezoid band fitted into the current face:
-  // a shorter outer edge sits inside the actual face, while a longer
-  // inner edge reaches farther toward the inset vertices. This keeps the
-  // bleed contained within the face and avoids the little corner gaps.
-  const outerInset = 0.18;
-  const innerInset = 0.18;
-
-  const ao = pointAlong(a, b, outerInset);
-  const bo = pointAlong(b, a, outerInset);
-  const ai = inwardPoint(a, center, innerInset);
-  const bi = inwardPoint(b, center, innerInset);
-
-  return [ao, bo, bi, ai];
+  return [a, b, bi, mi, ai];
 }
 
 function shouldRenderBlendOnThisSide(hex, neighbor) {
@@ -1010,21 +1010,45 @@ function shouldRenderBlendOnThisSide(hex, neighbor) {
 
   hydrateHexTerrainFields(hex);
   hydrateHexTerrainFields(neighbor);
-
-  // Every hex owns its own inside-edge fade. This is intentionally
-  // symmetric: if plains borders sea, the plains receives a subtle sea fade
-  // along only the edge touching sea, and the sea receives a subtle plains
-  // fade along only the matching edge touching plains.
   return hex.baseTerrain !== neighbor.baseTerrain;
 }
 
+function bleedPriority(baseTerrain) {
+  return BLEED_PRIORITY[baseTerrain] || 0;
+}
+
+function chooseCornerBlendBase(neighborA, neighborB) {
+  if (!neighborA && !neighborB) return null;
+  if (!neighborA) return neighborB.baseTerrain;
+  if (!neighborB) return neighborA.baseTerrain;
+  if (neighborA.baseTerrain === neighborB.baseTerrain) return neighborA.baseTerrain;
+  return bleedPriority(neighborA.baseTerrain) >= bleedPriority(neighborB.baseTerrain)
+    ? neighborA.baseTerrain
+    : neighborB.baseTerrain;
+}
+
+function cornerBlendPolygon(hex, edgeIndexA) {
+  const center = centerOf(hex.col, hex.row);
+  const pts = hexPoints(center.x, center.y);
+  const shared = pts[(edgeIndexA + 1) % 6];
+  const edgeA = edgeBlendPolygon(hex, EDGE_NAMES[edgeIndexA]);
+  const edgeB = edgeBlendPolygon(hex, EDGE_NAMES[(edgeIndexA + 1) % 6]);
+
+  // Small connector patch that bridges the gap between adjacent edge wedges.
+  const inwardShared = inwardPoint(shared, center, 0.29);
+  return [shared, edgeA[2], inwardShared, edgeB[4]];
+}
 
 function renderEdgeBlendForHex(hex) {
   if (!state.showEdgeBlend) return;
 
-  EDGE_NAMES.forEach(edgeName => {
+  const activeEdges = [];
+
+  EDGE_NAMES.forEach((edgeName, edgeIndex) => {
     const neighbor = getNeighborHex(hex, edgeName);
     if (!shouldRenderBlendOnThisSide(hex, neighbor)) return;
+
+    activeEdges.push({ edgeName, edgeIndex, neighbor });
 
     const neighborBase = baseTerrainById[neighbor.baseTerrain] || baseTerrainById.plains;
     const poly = svgElement("polygon", {
@@ -1034,6 +1058,24 @@ function renderEdgeBlendForHex(hex) {
       class: "edge-blend"
     });
     svg.appendChild(poly);
+  });
+
+  activeEdges.forEach(({ edgeIndex, neighbor }) => {
+    const nextEdgeIndex = (edgeIndex + 1) % EDGE_NAMES.length;
+    const next = activeEdges.find(item => item.edgeIndex === nextEdgeIndex);
+    if (!next) return;
+
+    const chosenBase = chooseCornerBlendBase(neighbor, next.neighbor);
+    const chosenTerrain = baseTerrainById[chosenBase];
+    if (!chosenTerrain) return;
+
+    const patch = svgElement("polygon", {
+      points: pointsString(cornerBlendPolygon(hex, edgeIndex)),
+      fill: chosenTerrain.color,
+      opacity: "0.17",
+      class: "edge-blend corner-blend"
+    });
+    svg.appendChild(patch);
   });
 }
 
@@ -1100,7 +1142,7 @@ function weightedRandomBaseTerrain() {
     "grassland", "grassland", "grassland",
     "lush_grassland", "lush_grassland",
     "desert", "deep_desert", "barrens", "bleak_barrens",
-    "shallow_sea", "shallow_sea", "deep_sea", "deep_water", "shallow_water",
+    "sea", "sea", "deep_sea", "coastal_water", "inland_water",
     "beach", "wetland", "jungle_floor", "rock", "snow", "wastes"
   ];
 
@@ -1153,7 +1195,7 @@ function setHexBaseFeature(hex, baseTerrain, features = null) {
 }
 
 function randomHexFrom(list) {
-  return list[Math.floor(Math.random() * list.length)];
+  return list[Math.floor(rand() * list.length)];
 }
 
 function growBlob(seedHex, size, baseTerrain, options = {}) {
@@ -1235,14 +1277,20 @@ function applyCoastlineCleanup() {
     const neighbors = getNeighborHexes(hex);
     const touchesDeepSea = neighbors.some(n => n.baseTerrain === "deep_sea");
     const touchesSea = neighbors.some(n => n.baseTerrain === "sea");
-    const touchesWater = neighbors.some(n => ["deep_sea", "sea", "shallow_water"].includes(n.baseTerrain));
+    const touchesCoastalWater = neighbors.some(n => n.baseTerrain === "coastal_water");
+    const touchesWater = neighbors.some(n => ["deep_sea", "sea", "coastal_water", "inland_water"].includes(n.baseTerrain));
 
     if (hex.baseTerrain === "deep_sea" && neighbors.some(n => !["deep_sea", "sea"].includes(n.baseTerrain))) {
       updates.push([hex.id, "sea"]);
       return;
     }
 
-    if (!["deep_sea", "sea", "shallow_water", "beach"].includes(hex.baseTerrain) && (touchesDeepSea || touchesSea)) {
+    if (hex.baseTerrain === "sea" && neighbors.some(n => !["deep_sea", "sea", "coastal_water"].includes(n.baseTerrain))) {
+      updates.push([hex.id, "coastal_water"]);
+      return;
+    }
+
+    if (!["deep_sea", "sea", "coastal_water", "inland_water", "beach"].includes(hex.baseTerrain) && (touchesDeepSea || touchesSea || touchesCoastalWater)) {
       if (rand() < 0.55) updates.push([hex.id, "beach"]);
       return;
     }
@@ -1266,15 +1314,15 @@ function assignNaturalFeatures() {
         features = rand() < 0.30 ? [randomItem(["waves", "kelp", "whirlpool"])] : [];
         if (rand() < 0.12) features.push("mist");
         break;
-      case "shallow_sea":
+      case "sea":
         features = rand() < 0.55 ? [randomItem(["waves", "reef", "shoals", "water_rocks", "kelp"])] : [];
         if (rand() < 0.16) features.push("mist");
         break;
-      case "deep_water":
+      case "coastal_water":
         features = rand() < 0.38 ? [randomItem(["waves", "kelp", "water_rocks", "whirlpool"])] : [];
         if (rand() < 0.15) features.push("mist");
         break;
-      case "shallow_water":
+      case "inland_water":
         features = rand() < 0.55 ? [randomItem(["waves", "shoals", "water_rocks", "rapids", "falls", "marsh"])] : [];
         if (rand() < 0.18) features.push("mist");
         break;
@@ -1351,6 +1399,7 @@ function randomizeNaturalMap() {
   // Start from a gentle default landmass.
   allHexes.forEach(hex => {
     hex.baseTerrain = rand() < 0.55 ? "grassland" : "plains";
+    hex.features = [];
     hex.terrainFeature = "none";
     hex.terrain = getTerrainDisplayName(hex.baseTerrain, hex.features);
   });
@@ -1363,7 +1412,7 @@ function randomizeNaturalMap() {
     growBlob(
       randomHexFrom(borderHexes),
       Math.floor(allHexes.length * (0.035 + rand() * 0.03) * Math.max(0, bias.water)),
-      randomItem(["shallow_sea", "deep_sea"])
+      randomItem(["coastal_water", "sea", "deep_sea"])
     );
   }
 
@@ -1373,7 +1422,7 @@ function randomizeNaturalMap() {
     growBlob(
       randomHexFrom(allHexes),
       Math.floor(allHexes.length * (0.01 + rand() * 0.01) * Math.max(0, bias.water)),
-      "shallow_water"
+      "inland_water"
     );
   }
 
