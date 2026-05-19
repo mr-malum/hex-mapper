@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v20b</title>
+<title>Hex Mapping Prototype v20c</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -269,7 +269,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v20b</h1>
+    <h1>Hex Mapping Prototype v20c</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -1034,35 +1034,55 @@ function chooseCornerBlendBase(neighborA, neighborB) {
     : neighborB.baseTerrain;
 }
 
-function cornerBlendPolygon(hex, edgeIndexA) {
+function hexesTouch(a, b) {
+  if (!a || !b) return false;
+  return EDGE_NAMES.some(edgeName => getNeighborHex(a, edgeName)?.id === b.id);
+}
+
+function outsideCornerPatchCandidate(hex, leftEdgeIndex) {
+  const rightEdgeIndex = (leftEdgeIndex + 1) % EDGE_NAMES.length;
+  const leftNeighbor = getNeighborHex(hex, EDGE_NAMES[leftEdgeIndex]);
+  const rightNeighbor = getNeighborHex(hex, EDGE_NAMES[rightEdgeIndex]);
   const center = centerOf(hex.col, hex.row);
   const pts = hexPoints(center.x, center.y);
+  const shared = pts[rightEdgeIndex];
+  const previous = pts[leftEdgeIndex];
+  const next = pts[(rightEdgeIndex + 1) % 6];
+  const candidates = [];
 
-  const previous = pts[edgeIndexA];
-  const shared = pts[(edgeIndexA + 1) % 6];
-  const next = pts[(edgeIndexA + 2) % 6];
+  // Candidate 1: bleed source comes from the left edge neighbor and should
+  // continue around the outside corner into the right-side host relationship.
+  if (leftNeighbor && rightNeighbor && shouldRenderBlendOnThisSide(hex, leftNeighbor) && hexesTouch(leftNeighbor, rightNeighbor) && shouldRenderBlendOnThisSide(rightNeighbor, leftNeighbor)) {
+    const leftPoly = edgeBlendPolygon(hex, EDGE_NAMES[leftEdgeIndex]);
+    candidates.push({
+      baseTerrain: leftNeighbor.baseTerrain,
+      polygon: [shared, pointAlong(shared, next, 0.34), leftPoly[2]]
+    });
+  }
 
-  // Visible corner-sector patch:
-  // a small kite/triangle inside the hex corner, spanning from one adjacent
-  // edge band to the other. This fills the outside-corner gap that the edge
-  // wedges alone can leave.
-  const alongPreviousEdge = pointAlong(shared, previous, 0.34);
-  const alongNextEdge = pointAlong(shared, next, 0.34);
-  const inwardShared = inwardPoint(shared, center, 0.36);
+  // Candidate 2: bleed source comes from the right edge neighbor and should
+  // continue around the outside corner into the left-side host relationship.
+  if (leftNeighbor && rightNeighbor && shouldRenderBlendOnThisSide(hex, rightNeighbor) && hexesTouch(leftNeighbor, rightNeighbor) && shouldRenderBlendOnThisSide(leftNeighbor, rightNeighbor)) {
+    const rightPoly = edgeBlendPolygon(hex, EDGE_NAMES[rightEdgeIndex]);
+    candidates.push({
+      baseTerrain: rightNeighbor.baseTerrain,
+      polygon: [shared, rightPoly[4], pointAlong(shared, previous, 0.34)]
+    });
+  }
 
-  return [shared, alongNextEdge, inwardShared, alongPreviousEdge];
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  candidates.sort((a, b) => bleedPriority(b.baseTerrain) - bleedPriority(a.baseTerrain));
+  return candidates[0];
 }
 
 function renderEdgeBlendForHex(hex) {
   if (!state.showEdgeBlend) return;
 
-  const activeEdges = [];
-
-  EDGE_NAMES.forEach((edgeName, edgeIndex) => {
+  EDGE_NAMES.forEach((edgeName) => {
     const neighbor = getNeighborHex(hex, edgeName);
     if (!shouldRenderBlendOnThisSide(hex, neighbor)) return;
-
-    activeEdges.push({ edgeName, edgeIndex, neighbor });
 
     const neighborBase = baseTerrainById[neighbor.baseTerrain] || baseTerrainById.plains;
     const poly = svgElement("polygon", {
@@ -1074,20 +1094,18 @@ function renderEdgeBlendForHex(hex) {
     svg.appendChild(poly);
   });
 
-  activeEdges.forEach(({ edgeIndex, neighbor }) => {
-    const nextEdgeIndex = (edgeIndex + 1) % EDGE_NAMES.length;
-    const next = activeEdges.find(item => item.edgeIndex === nextEdgeIndex);
-    if (!next) return;
+  EDGE_NAMES.forEach((_, edgeIndex) => {
+    const patchData = outsideCornerPatchCandidate(hex, edgeIndex);
+    if (!patchData) return;
 
-    const chosenBase = chooseCornerBlendBase(neighbor, next.neighbor);
-    const chosenTerrain = baseTerrainById[chosenBase];
+    const chosenTerrain = baseTerrainById[patchData.baseTerrain];
     if (!chosenTerrain) return;
 
     const patch = svgElement("polygon", {
-      points: pointsString(cornerBlendPolygon(hex, edgeIndex)),
+      points: pointsString(patchData.polygon),
       fill: chosenTerrain.color,
       opacity: "0.22",
-      class: "edge-blend corner-blend"
+      class: "edge-blend outside-corner-blend"
     });
     svg.appendChild(patch);
   });
