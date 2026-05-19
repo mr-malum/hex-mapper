@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v12</title>
+<title>Hex Mapping Prototype v12b</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -249,7 +249,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v12</h1>
+    <h1>Hex Mapping Prototype v12b</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -813,7 +813,7 @@ function getNeighborHex(hex, edgeName) {
   return state.hexes[localHexId(hex.col + offset[0], hex.row + offset[1])] || null;
 }
 
-function inwardPoint(point, center, amount = 0.28) {
+function inwardPoint(point, center, amount = 0.22) {
   return {
     x: point.x + (center.x - point.x) * amount,
     y: point.y + (center.y - point.y) * amount
