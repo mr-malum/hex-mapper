@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v17</title>
+<title>Hex Mapping Prototype v18</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -269,7 +269,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v17</h1>
+    <h1>Hex Mapping Prototype v18</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -969,19 +969,19 @@ function midpoint(a, b) {
 
 function edgeBlendPolygon(hex, edgeName) {
   const center = centerOf(hex.col, hex.row);
-  const pts = hexPoints(center.x, center.y);
+  const outer = hexPoints(center.x, center.y);
+  const inner = outer.map(point => inwardPoint(point, center, 0.18));
   const index = EDGE_NAMES.indexOf(edgeName);
-  const a = pts[index];
-  const b = pts[(index + 1) % 6];
-  const mid = midpoint(a, b);
 
-  // Wider, shallower blend wedge: covers more of the neighboring hex's
-  // corresponding section without pushing as deeply into the current hex.
-  const ai = inwardPoint(a, center, 0.22);
-  const bi = inwardPoint(b, center, 0.22);
-  const mi = inwardPoint(mid, center, 0.30);
+  // Full trapezoid-style band. Using the matching edge from a smaller,
+  // inset version of the same hex makes adjacent bleed bands meet at the
+  // inset vertices instead of leaving little corner gaps.
+  const a = outer[index];
+  const b = outer[(index + 1) % 6];
+  const bi = inner[(index + 1) % 6];
+  const ai = inner[index];
 
-  return [a, b, bi, mi, ai];
+  return [a, b, bi, ai];
 }
 
 function shouldRenderBlendOnThisSide(hex, neighbor) {
