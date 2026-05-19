@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v18</title>
+<title>Hex Mapping Prototype v19</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -269,7 +269,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v18</h1>
+    <h1>Hex Mapping Prototype v19</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -967,21 +967,42 @@ function midpoint(a, b) {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
+function pointAlong(a, b, t) {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t
+  };
+}
+
+function pointAlong(a, b, t) {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t
+  };
+}
+
+
 function edgeBlendPolygon(hex, edgeName) {
   const center = centerOf(hex.col, hex.row);
   const outer = hexPoints(center.x, center.y);
-  const inner = outer.map(point => inwardPoint(point, center, 0.18));
   const index = EDGE_NAMES.indexOf(edgeName);
 
-  // Full trapezoid-style band. Using the matching edge from a smaller,
-  // inset version of the same hex makes adjacent bleed bands meet at the
-  // inset vertices instead of leaving little corner gaps.
   const a = outer[index];
   const b = outer[(index + 1) % 6];
-  const bi = inner[(index + 1) % 6];
-  const ai = inner[index];
 
-  return [a, b, bi, ai];
+  // Reverse-trapezoid band fitted into the current face:
+  // a shorter outer edge sits inside the actual face, while a longer
+  // inner edge reaches farther toward the inset vertices. This keeps the
+  // bleed contained within the face and avoids the little corner gaps.
+  const outerInset = 0.18;
+  const innerInset = 0.18;
+
+  const ao = pointAlong(a, b, outerInset);
+  const bo = pointAlong(b, a, outerInset);
+  const ai = inwardPoint(a, center, innerInset);
+  const bi = inwardPoint(b, center, innerInset);
+
+  return [ao, bo, bi, ai];
 }
 
 function shouldRenderBlendOnThisSide(hex, neighbor) {
@@ -1016,6 +1037,59 @@ function renderEdgeBlendForHex(hex) {
   });
 }
 
+
+let seededRandomFn = Math.random;
+
+function hashSeed(seedText) {
+  let h = 2166136261;
+  const text = String(seedText || "kadesh");
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function makeSeededRandom(seedText) {
+  let state = hashSeed(seedText) || 1;
+  return function seededRandom() {
+    state += 0x6D2B79F5;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function rand() {
+  return seededRandomFn();
+}
+
+function getNaturalSeed() {
+  return document.getElementById("natural-seed-input")?.value || "kadesh";
+}
+
+function setNewNaturalSeed() {
+  const seed = Math.random().toString(36).slice(2, 8);
+  document.getElementById("natural-seed-input").value = seed;
+}
+
+function getGeneratorBiases() {
+  const read = id => Number(document.getElementById(id)?.value || 1);
+  return {
+    water: read("bias-water"),
+    forest: read("bias-forest"),
+    desert: read("bias-desert"),
+    mountain: read("bias-mountain"),
+    snow: read("bias-snow"),
+    wetland: read("bias-wetland")
+  };
+}
+
+function scaledCount(baseCount, bias, min = 0) {
+  return Math.max(min, Math.round(baseCount * Math.max(0, bias)));
+}
+
 function randomItem(items) {
   return items[Math.floor(rand() * items.length)];
 }
@@ -1026,7 +1100,7 @@ function weightedRandomBaseTerrain() {
     "grassland", "grassland", "grassland",
     "lush_grassland", "lush_grassland",
     "desert", "deep_desert", "barrens", "bleak_barrens",
-    "sea", "shallow_sea", "deep_sea", "shallow_water",
+    "shallow_sea", "shallow_sea", "deep_sea", "deep_water", "shallow_water",
     "beach", "wetland", "jungle_floor", "rock", "snow", "wastes"
   ];
 
@@ -1466,7 +1540,7 @@ function setTool(tool) {
 
 function paintTerrain(id) {
   if (!state.hexes[id]) return;
-  const combo = ensureValidCombo(state.selectedBaseTerrain, state.selectedTerrainFeaturess);
+  const combo = ensureValidCombo(state.selectedBaseTerrain, state.selectedTerrainFeatures);
   state.hexes[id].baseTerrain = combo.baseTerrain;
   state.hexes[id].features = combo.features;
   state.hexes[id].terrainFeature = combo.features[0] || "none";
@@ -1609,7 +1683,7 @@ function renderTerrainControls() {
     `;
     button.addEventListener("click", () => {
       state.selectedBaseTerrain = base.id;
-      state.selectedTerrainFeaturess = ensureValidFeatureArray(state.selectedBaseTerrain, state.selectedTerrainFeaturess);
+      state.selectedTerrainFeatures = ensureValidFeatureArray(state.selectedBaseTerrain, state.selectedTerrainFeatures);
       renderTerrainControls();
     });
     baseContainer.appendChild(button);
@@ -1622,19 +1696,19 @@ function renderTerrainControls() {
     const feature = featureById[featureId];
     const button = document.createElement("button");
     button.className = "terrain-button";
-    const active = state.selectedTerrainFeaturess.includes(featureId);
+    const active = state.selectedTerrainFeatures.includes(featureId);
     button.classList.toggle("active", active);
     button.innerHTML = `
       <span style="font-size: 18px; text-align: center;">${feature.glyph || "·"}</span>
       <span>${feature.label}</span>
     `;
     button.addEventListener("click", () => {
-      if (state.selectedTerrainFeaturess.includes(featureId)) {
-        state.selectedTerrainFeaturess = state.selectedTerrainFeaturess.filter(id => id !== featureId);
+      if (state.selectedTerrainFeatures.includes(featureId)) {
+        state.selectedTerrainFeatures = state.selectedTerrainFeatures.filter(id => id !== featureId);
       } else {
-        state.selectedTerrainFeaturess = enforceFeatureCategoryRules([...state.selectedTerrainFeaturess, featureId]);
+        state.selectedTerrainFeatures = enforceFeatureCategoryRules([...state.selectedTerrainFeatures, featureId]);
       }
-      state.selectedTerrainFeaturess = ensureValidFeatureArray(state.selectedBaseTerrain, state.selectedTerrainFeaturess);
+      state.selectedTerrainFeatures = ensureValidFeatureArray(state.selectedBaseTerrain, state.selectedTerrainFeatures);
       renderTerrainControls();
     });
     featureContainer.appendChild(button);
@@ -1642,7 +1716,7 @@ function renderTerrainControls() {
 
   const preview = document.createElement("div");
   preview.className = "data-card";
-  preview.innerHTML = `<strong>Brush:</strong><br>${getTerrainDisplayName(state.selectedBaseTerrain, state.selectedTerrainFeaturess)}<br><span class="small">${state.selectedTerrainFeaturess.length ? state.selectedTerrainFeaturess.map(id => featureById[id]?.label).join(", ") : "No features"}</span>`;
+  preview.innerHTML = `<strong>Brush:</strong><br>${getTerrainDisplayName(state.selectedBaseTerrain, state.selectedTerrainFeatures)}<br><span class="small">${state.selectedTerrainFeatures.length ? state.selectedTerrainFeatures.map(id => featureById[id]?.label).join(", ") : "No features"}</span>`;
   featureContainer.appendChild(preview);
 }
 
@@ -1928,7 +2002,7 @@ function renderInspector() {
     Hex radius: ${HEX_RADIUS}px<br>
     Terrain labels: ${state.showTerrainLabels ? "on" : "off"}<br>
     Coordinate labels: ${state.showCoordLabels ? "on" : "off"}<br>
-    Active terrain brush: ${getTerrainDisplayName(state.selectedBaseTerrain, state.selectedTerrainFeaturess)}<br>
+    Active terrain brush: ${getTerrainDisplayName(state.selectedBaseTerrain, state.selectedTerrainFeatures)}<br>
     Edge bleed: ${state.showEdgeBlend ? "on" : "off"}<br>
     Natural seed: ${getNaturalSeed()}
   `;
@@ -2326,7 +2400,7 @@ document.getElementById("large-grid-button").addEventListener("click", () => {
 });
 
 document.getElementById("clear-features-button").addEventListener("click", () => {
-  state.selectedTerrainFeaturess = [];
+  state.selectedTerrainFeatures = [];
   renderTerrainControls();
 });
 
