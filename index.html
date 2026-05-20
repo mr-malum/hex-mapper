@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Hex Mapping Prototype v20f</title>
+<title>Hex Mapping Prototype v21e</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <style>
@@ -269,7 +269,7 @@
 <body>
 <div id="app">
   <aside>
-    <h1>Hex Mapping Prototype v20f</h1>
+    <h1>Hex Mapping Prototype v21e</h1>
     <p>Standalone prototype. Flat-top hexes, drag terrain, POI glyphs, snapped region borders, roads, rivers, JSON export, and CSV import.</p>
 
     <h2>Grid</h2>
@@ -327,6 +327,7 @@
     <button data-tool="river" class="tool-button">Draw River</button>
     <button data-tool="erase" class="tool-button">Erase Overlay</button>
     <button data-tool="inspect" class="tool-button">Inspect</button>
+    <button id="undo-button">Undo</button>
 
     <h2>Base Terrain</h2>
     <div id="base-terrain-list"></div>
@@ -511,8 +512,8 @@ const VALID_FEATURES_BY_BASE = {
 };
 
 const LEGACY_TERRAIN_TO_COMBO = {
-  "Deep Sea": ["deep_sea", []],
-  "Ocean": ["sea", []],
+  "Deep Sea": ["sea", []],
+  "Ocean": ["deep_sea", []],
   "Sea": ["coastal_water", []],
   "Inland Waters": ["inland_water", []],
   "Inland Water": ["inland_water", []],
@@ -814,7 +815,10 @@ let state = {
   lastRiverHexId: null,
   hoverEdge: null,
   isPointerDown: false,
+  isUndoActionActive: false,
+  dragLastHexId: null,
   paintedThisDrag: new Set(),
+  undoStack: [],
   hexes: {},
   pois: [],
   regionBorders: [],
@@ -1087,7 +1091,12 @@ function outsideCornerPatchCandidate(hex, leftEdgeIndex) {
   if (!candidates.length) return null;
   if (candidates.length === 1) return candidates[0];
 
-  candidates.sort((a, b) => bleedPriority(b.baseTerrain) - bleedPriority(a.baseTerrain));
+  // Triple-junction guard: when two different source colors compete for the
+  // same outside corner, skip the connector instead of stacking/choosing one.
+  // This keeps three-terrain meetings from turning into muddy overlap blobs.
+  const uniqueSourceBases = [...new Set(candidates.map(candidate => candidate.baseTerrain))];
+  if (uniqueSourceBases.length > 1) return null;
+
   return candidates[0];
 }
 
@@ -1118,7 +1127,7 @@ function renderEdgeBlendForHex(hex) {
     const patch = svgElement("polygon", {
       points: pointsString(patchData.polygon),
       fill: chosenTerrain.color,
-      opacity: "0.18",
+      opacity: "0.16",
       class: "edge-blend outside-corner-blend"
     });
     svg.appendChild(patch);
@@ -1606,12 +1615,88 @@ function panByScreenDelta(deltaClientX, deltaClientY) {
 
 
 function stopPaintingDrag() {
+  const wasDown = state.isPointerDown;
   state.isPointerDown = false;
   state.paintedThisDrag = new Set();
+  if (wasDown) finishUndoableAction();
 }
 
 function isLeftButtonStillDown(event) {
   return (event.buttons & 1) === 1;
+}
+
+
+function snapshotEditableState() {
+  return {
+    hexes: JSON.parse(JSON.stringify(state.hexes)),
+    pois: JSON.parse(JSON.stringify(state.pois)),
+    regionBorders: JSON.parse(JSON.stringify(state.regionBorders)),
+    roads: JSON.parse(JSON.stringify(state.roads)),
+    rivers: JSON.parse(JSON.stringify(state.rivers)),
+    selectedHexId: state.selectedHexId,
+    lastRoadHexId: state.lastRoadHexId,
+    lastRiverHexId: state.lastRiverHexId
+  };
+}
+
+function restoreEditableState(snapshot) {
+  state.hexes = snapshot.hexes;
+  state.pois = snapshot.pois;
+  state.regionBorders = snapshot.regionBorders;
+  state.roads = snapshot.roads;
+  state.rivers = snapshot.rivers;
+  state.selectedHexId = snapshot.selectedHexId;
+  state.lastRoadHexId = snapshot.lastRoadHexId;
+  state.lastRiverHexId = snapshot.lastRiverHexId;
+  state.isPointerDown = false;
+  state.isUndoActionActive = false;
+  state.dragLastHexId = null;
+  state.paintedThisDrag = new Set();
+  render();
+  updateUndoButton();
+}
+
+function beginUndoableAction() {
+  if (state.isUndoActionActive) return;
+  state.undoStack.push(snapshotEditableState());
+  if (state.undoStack.length > 80) state.undoStack.shift();
+  state.isUndoActionActive = true;
+  updateUndoButton();
+}
+
+function finishUndoableAction() {
+  state.isUndoActionActive = false;
+  state.dragLastHexId = null;
+  updateUndoButton();
+}
+
+function undoLastAction() {
+  const snapshot = state.undoStack.pop();
+  if (!snapshot) return;
+  restoreEditableState(snapshot);
+}
+
+function updateUndoButton() {
+  const button = document.getElementById("undo-button");
+  if (!button) return;
+  button.disabled = state.undoStack.length === 0;
+  button.textContent = state.undoStack.length ? `Undo (${state.undoStack.length})` : "Undo";
+}
+
+function drawSegment(collection, prefix, fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return false;
+  if (!state.hexes[fromId] || !state.hexes[toId]) return false;
+  if (segmentExists(collection, fromId, toId)) return false;
+
+  collection.push({
+    id: `${prefix}_${collection.length + 1}`,
+    from: fromId,
+    to: toId,
+    fromWorld: state.hexes[fromId].worldId,
+    toWorld: state.hexes[toId].worldId
+  });
+
+  return true;
 }
 
 function setTool(tool) {
@@ -1624,6 +1709,8 @@ function setTool(tool) {
   if (tool !== "river") state.lastRiverHexId = null;
 
   state.tool = tool;
+  if (tool !== "inspect") state.selectedHexId = null;
+  state.dragLastHexId = null;
   state.paintedThisDrag = new Set();
 
   document.querySelectorAll(".tool-button").forEach(button => {
@@ -1737,20 +1824,49 @@ function eraseOverlay(id) {
 
 function applyToolToHex(event, id, fromDrag = false) {
   const hex = state.hexes[id];
-  if (!hex) return;
+  if (!hex) return false;
 
   const dragKey = `${state.tool}:${id}`;
-  if (fromDrag && state.paintedThisDrag.has(dragKey) && ["terrain", "poi", "erase"].includes(state.tool)) return;
+  if (fromDrag && state.paintedThisDrag.has(dragKey) && ["terrain", "poi", "erase"].includes(state.tool)) return false;
   state.paintedThisDrag.add(dragKey);
 
-  if (state.tool === "terrain") paintTerrain(id);
-  else if (state.tool === "poi" && !fromDrag) placePoi(id);
-  else if (state.tool === "region-border") toggleRegionBorder(id, nearestEdgeFromMouse(event, hex));
-  else if (state.tool === "road") drawRoad(id);
-  else if (state.tool === "river") drawRiver(id);
-  else if (state.tool === "erase") eraseOverlay(id);
-  else state.selectedHexId = id;
+  let changed = false;
+
+  if (state.tool === "terrain") {
+    const before = `${hex.baseTerrain}:${JSON.stringify(hex.features || [])}`;
+    paintTerrain(id);
+    changed = before !== `${hex.baseTerrain}:${JSON.stringify(hex.features || [])}`;
+  } else if (state.tool === "poi" && !fromDrag) {
+    placePoi(id);
+    changed = true;
+  } else if (state.tool === "region-border") {
+    toggleRegionBorder(id, nearestEdgeFromMouse(event, hex));
+    changed = true;
+  } else if (state.tool === "road") {
+    if (state.dragLastHexId) {
+      changed = drawSegment(state.roads, "road", state.dragLastHexId, id);
+    }
+    state.dragLastHexId = id;
+    state.lastRoadHexId = id;
+  } else if (state.tool === "river") {
+    if (state.dragLastHexId) {
+      changed = drawSegment(state.rivers, "river", state.dragLastHexId, id);
+    }
+    state.dragLastHexId = id;
+    state.lastRiverHexId = id;
+  } else if (state.tool === "erase") {
+    const before = state.pois.length + state.regionBorders.length + state.roads.length + state.rivers.length;
+    eraseOverlay(id);
+    const after = state.pois.length + state.regionBorders.length + state.roads.length + state.rivers.length;
+    changed = before !== after;
+  } else {
+    state.selectedHexId = id;
+  }
+
+  if (state.tool !== "inspect") state.selectedHexId = null;
+  return changed;
 }
+
 
 function segmentPath(segment) {
   const from = state.hexes[segment.from];
@@ -1903,9 +2019,11 @@ function render() {
       event.preventDefault();
       state.isPointerDown = true;
       state.paintedThisDrag = new Set();
+      state.dragLastHexId = null;
 
-      applyToolToHex(event, hex.id, false);
-      render();
+      if (state.tool !== "inspect") beginUndoableAction();
+      const changed = applyToolToHex(event, hex.id, false);
+      if (state.tool === "inspect" || changed || state.isUndoActionActive) render();
     });
 
     polygon.addEventListener("pointerup", event => {
@@ -1924,9 +2042,9 @@ function render() {
         return;
       }
 
-      if (state.isPointerDown && ["terrain", "erase"].includes(state.tool)) {
-        applyToolToHex(event, hex.id, true);
-        render();
+      if (state.isPointerDown && ["terrain", "region-border", "road", "river", "erase"].includes(state.tool)) {
+        const changed = applyToolToHex(event, hex.id, true);
+        if (changed || ["region-border", "road", "river"].includes(state.tool)) render();
       }
     });
 
@@ -2039,7 +2157,7 @@ function render() {
     svg.appendChild(pendingOutline);
   }
 
-  if (state.selectedHexId && state.hexes[state.selectedHexId]) {
+  if (state.tool === "inspect" && state.selectedHexId && state.hexes[state.selectedHexId]) {
     const hex = state.hexes[state.selectedHexId];
     const center = centerOf(hex.col, hex.row);
     const outline = svgElement("polygon", {
@@ -2486,6 +2604,7 @@ document.getElementById("small-grid-button").addEventListener("click", () => {
   WORLD_ORIGIN_X = 300;
   WORLD_ORIGIN_Y = 300;
   initHexes(12, 12, true);
+  updateUndoButton();
 });
 
 document.getElementById("large-grid-button").addEventListener("click", () => {
@@ -2494,21 +2613,43 @@ document.getElementById("large-grid-button").addEventListener("click", () => {
   initHexes(50, 50, false);
 });
 
+const undoButton = document.getElementById("undo-button");
+if (undoButton) {
+  undoButton.addEventListener("click", () => {
+    undoLastAction();
+  });
+}
+
+document.addEventListener("keydown", event => {
+  const tag = String(event.target?.tagName || "").toLowerCase();
+  if (["input", "select", "textarea"].includes(tag)) return;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    undoLastAction();
+  }
+});
+
 document.getElementById("clear-features-button").addEventListener("click", () => {
   state.selectedTerrainFeatures = [];
   renderTerrainControls();
 });
 
 document.getElementById("randomize-terrain-button").addEventListener("click", () => {
+  beginUndoableAction();
   randomizeTerrain({ featuresOnly: false });
+  finishUndoableAction();
 });
 
 document.getElementById("randomize-features-button").addEventListener("click", () => {
+  beginUndoableAction();
   randomizeTerrain({ featuresOnly: true });
+  finishUndoableAction();
 });
 
 document.getElementById("randomize-natural-button").addEventListener("click", () => {
+  beginUndoableAction();
   randomizeNaturalMap();
+  finishUndoableAction();
 });
 
 document.getElementById("new-seed-button").addEventListener("click", () => {
@@ -2516,6 +2657,7 @@ document.getElementById("new-seed-button").addEventListener("click", () => {
 });
 
 initHexes(12, 12, true);
+updateUndoButton();
 renderTerrainControls();
 renderPoiControls();
 updateLabelToggleText();
