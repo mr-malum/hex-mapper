@@ -826,7 +826,8 @@ let state = {
   rivers: [],
   showTerrainLabels: true,
   showCoordLabels: true,
-  showEdgeBlend: true
+  showEdgeBlend: true,
+  suppressEdgeBlendForDrag: false
 };
 
 let viewState = {
@@ -1101,7 +1102,7 @@ function outsideCornerPatchCandidate(hex, leftEdgeIndex) {
 }
 
 function renderEdgeBlendForHex(hex) {
-  if (!state.showEdgeBlend) return;
+  if (!state.showEdgeBlend || state.suppressEdgeBlendForDrag) return;
 
   EDGE_NAMES.forEach((edgeName) => {
     const neighbor = getNeighborHex(hex, edgeName);
@@ -1613,12 +1614,34 @@ function panByScreenDelta(deltaClientX, deltaClientY) {
   applyViewBox();
 }
 
+let renderQueued = false;
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    render();
+  });
+}
+
 
 function stopPaintingDrag() {
   const wasDown = state.isPointerDown;
+  const wasSuppressingEdgeBlend = state.suppressEdgeBlendForDrag;
   state.isPointerDown = false;
+  state.suppressEdgeBlendForDrag = false;
   state.paintedThisDrag = new Set();
-  if (wasDown) finishUndoableAction();
+
+  if (wasDown) {
+    finishUndoableAction();
+  }
+
+  // During drag/edit gestures, edge bleed is temporarily skipped to keep the
+  // SVG lighter. Restore a full render after the gesture ends.
+  if (wasDown || wasSuppressingEdgeBlend) {
+    render();
+  }
 }
 
 function isLeftButtonStillDown(event) {
@@ -1709,6 +1732,7 @@ function setTool(tool) {
   if (tool !== "river") state.lastRiverHexId = null;
 
   state.tool = tool;
+  state.suppressEdgeBlendForDrag = false;
   if (tool !== "inspect") state.selectedHexId = null;
   state.dragLastHexId = null;
   state.paintedThisDrag = new Set();
@@ -2020,10 +2044,15 @@ function render() {
       state.isPointerDown = true;
       state.paintedThisDrag = new Set();
       state.dragLastHexId = null;
+      state.suppressEdgeBlendForDrag = ["terrain", "region-border", "road", "river", "erase"].includes(state.tool);
 
       if (state.tool !== "inspect") beginUndoableAction();
       const changed = applyToolToHex(event, hex.id, false);
-      if (state.tool === "inspect" || changed || state.isUndoActionActive) render();
+      if (state.tool === "inspect") {
+        render();
+      } else if (changed || state.isUndoActionActive) {
+        scheduleRender();
+      }
     });
 
     polygon.addEventListener("pointerup", event => {
@@ -2044,7 +2073,7 @@ function render() {
 
       if (state.isPointerDown && ["terrain", "region-border", "road", "river", "erase"].includes(state.tool)) {
         const changed = applyToolToHex(event, hex.id, true);
-        if (changed || ["region-border", "road", "river"].includes(state.tool)) render();
+        if (changed || ["region-border", "road", "river"].includes(state.tool)) scheduleRender();
       }
     });
 
