@@ -62,6 +62,7 @@ const TERRAIN_FEATURES = [
 
   { id: "ridges", label: "Ridges", glyph: "⌒", category: "structure" },
   { id: "mountains", label: "Mountains", glyph: "▲", category: "structure" },
+  { id: "snowcapped_mountains", label: "Snowcapped Mountains", glyph: "△", category: "structure" },
   { id: "cliffs", label: "Cliffs", glyph: "▴", category: "structure" },
   { id: "lone_mountain", label: "Lone Mountain", glyph: "◆", category: "structure" },
   { id: "volcano", label: "Volcano", glyph: "◭", category: "structure" },
@@ -100,7 +101,7 @@ const VALID_FEATURES_BY_BASE = {
   deep_desert: ["ridges", "cactus_scrub", "cliffs", "lone_mountain", "mist"],
   barrens: ["shrub", "ridges", "cliffs", "lone_mountain", "mist"],
   bleak_barrens: ["shrub", "ridges", "cliffs", "lone_mountain", "mist"],
-  snow: ["ridges", "mountains", "woods", "forest", "snowcap", "ice", "mist"],
+  snow: ["ridges", "mountains", "snowcapped_mountains", "woods", "forest", "snowcap", "ice", "mist"],
   rock: ["ridges", "mountains", "woods", "forest", "cliffs", "lone_mountain", "snowcap", "volcano", "mist"],
   wastes: ["ridges", "cliffs", "lone_mountain", "volcano", "mist"]
 };
@@ -130,7 +131,7 @@ const LEGACY_TERRAIN_TO_COMBO = {
 
   "Mountains": ["rock", ["mountains"]],
   "Forested Mountains": ["rock", ["mountains", "forest"]],
-  "Snowcapped Mountains": ["rock", ["mountains", "snowcap"]],
+  "Snowcapped Mountains": ["snow", ["snowcapped_mountains"]],
 
   "Sandy Desert": ["desert", []],
   "Deep Desert": ["deep_desert", []],
@@ -155,7 +156,7 @@ const LEGACY_TERRAIN_TO_COMBO = {
 
 const FEATURE_RENDER_ORDER = [
   "ice", "farmland", "waves",
-  "ridges", "cliffs", "mountains", "lone_mountain", "volcano", "reef", "shoals", "water_rocks", "rapids", "falls", "whirlpool",
+  "ridges", "cliffs", "mountains", "snowcapped_mountains", "lone_mountain", "volcano", "reef", "shoals", "water_rocks", "rapids", "falls", "whirlpool",
   "shrub", "woods", "forest", "jungle", "cactus_scrub", "marsh", "kelp",
   "snowcap",
   "mist"
@@ -205,6 +206,7 @@ const FEATURE_ELEVATION_MODIFIERS = {
   ridges: 1,
   cliffs: 1,
   mountains: 2,
+  snowcapped_mountains: 2,
   lone_mountain: 2,
   volcano: 2,
   snowcap: 0,
@@ -327,7 +329,7 @@ function getTerrainDisplayName(baseId, featuresInput = []) {
   }
 
   if (baseId === "snow") {
-    if (has("mountains") || has("snowcap")) return prefix("Snowcapped Mountains");
+    if (has("snowcapped_mountains") || has("mountains") || has("snowcap")) return prefix("Snowcapped Mountains");
     if (has("ridges")) return prefix("Snowy Hills");
     if (has("forest")) return prefix("Snowy Forest");
     if (has("woods")) return prefix("Snowy Woods");

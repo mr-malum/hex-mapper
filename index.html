@@ -338,7 +338,7 @@
     <section id="setup-panel" class="tab-panel active">
     <h2>Grid</h2>
     <div class="two-col">
-      <button id="small-grid-button">12×12 Test</button>
+      <button id="medium-grid-button">20×20 Grid</button>
       <button id="large-grid-button">50×50 Grid</button>
     </div>
     <button id="randomize-terrain-button">Randomize Terrain</button>
@@ -402,13 +402,13 @@
     <section id="paint-panel" class="tab-panel">
     <h2>Tool</h2>
     <button data-tool="pan" class="tool-button">Pan / Move Map</button>
-    <button data-tool="terrain" class="tool-button active">Terrain Brush</button>
+    <button data-tool="terrain" class="tool-button">Terrain Brush</button>
     <button data-tool="poi" class="tool-button">Place POI</button>
     <button data-tool="region-border" class="tool-button">Region Border</button>
     <button data-tool="road" class="tool-button">Draw Road</button>
     <button data-tool="river" class="tool-button">Draw River</button>
     <button data-tool="erase" class="tool-button">Erase Overlay</button>
-    <button data-tool="inspect" class="tool-button">Inspect</button>
+    <button data-tool="inspect" class="tool-button active">Inspect</button>
     <button id="undo-button">Undo</button>
 
     <h2>Base Terrain</h2>
@@ -499,8 +499,8 @@
 <script src="js/hex-grid.js"></script>
 <script src="js/map-io.js"></script>
 <script>
-let GRID_COLS = 12;
-let GRID_ROWS = 12;
+let GRID_COLS = 20;
+let GRID_ROWS = 20;
 let WORLD_ORIGIN_X = 0;
 let WORLD_ORIGIN_Y = 0;
 
@@ -515,8 +515,9 @@ const FEATURE_ART_MIN_ZOOM = 0.25;
 const FEATURE_ART_FULL_ZOOM = 1.25;
 const FULL_DETAIL_MIN_ZOOM = 1.26;
 const TERRAIN_CACHE_SCALE = 1.5;
-const TERRAIN_LABEL_MIN_ZOOM = 1.35;
-const COORD_LABEL_MIN_ZOOM = 1.75;
+const FEATURE_IMAGE_SUPERSAMPLE = 3;
+const TERRAIN_LABEL_MIN_ZOOM = 1;
+const COORD_LABEL_MIN_ZOOM = 0.6;
 
 const EDGE_NAMES = ["E", "SE", "SW", "W", "NW", "NE"];
 const DEFAULT_GEOGRAPHIC_REGION_ID = "REG-0000";
@@ -543,7 +544,7 @@ const POI_TYPES = [
 const poiTypeById = Object.fromEntries(POI_TYPES.map(p => [p.id, p]));
 
 let state = {
-  tool: "terrain",
+  tool: "inspect",
   selectedTerrain: "plains",
   selectedBaseTerrain: "plains",
   selectedTerrainFeatures: [],
@@ -644,15 +645,9 @@ function initHexes(cols = GRID_COLS, rows = GRID_ROWS, seeded = true) {
   state.lastRoadHexId = null;
   state.lastRiverHexId = null;
 
-  if (cols * rows > 400) {
-    state.showTerrainLabels = false;
-    state.showCoordLabels = false;
-    updateLabelToggleText();
-  } else {
-    state.showTerrainLabels = true;
-    state.showCoordLabels = true;
-    updateLabelToggleText();
-  }
+  state.showTerrainLabels = true;
+  state.showCoordLabels = true;
+  updateLabelToggleText();
 
   for (let col = 0; col < GRID_COLS; col++) {
     for (let row = 0; row < GRID_ROWS; row++) {
@@ -1110,10 +1105,10 @@ function weightedRandomBaseTerrain() {
 }
 
 const FEATURE_PROBABILITY_RULES = {
-  deep_sea: { chance: 0.20, weights: { waves: 5, whirlpool: 1, kelp: 1, ice: 1, mist: 1 } },
-  sea: { chance: 0.25, weights: { waves: 5, kelp: 3, reef: 2, shoals: 2, water_rocks: 1, whirlpool: 1, ice: 1, mist: 1 } },
-  coastal_water: { chance: 0.32, weights: { waves: 4, reef: 4, shoals: 4, kelp: 3, water_rocks: 3, whirlpool: 1, ice: 1, mist: 1 } },
-  inland_water: { chance: 0.28, weights: { waves: 2, shoals: 3, water_rocks: 3, marsh: 3, rapids: 2, falls: 1, ice: 1, mist: 2 } },
+  deep_sea: { chance: 0.20, weights: { waves: 8, whirlpool: 0.25, kelp: 1, ice: 1, mist: 1 } },
+  sea: { chance: 0.25, weights: { waves: 8, kelp: 3, reef: 1.5, shoals: 2, water_rocks: 0.4, whirlpool: 0.25, ice: 1, mist: 1 } },
+  coastal_water: { chance: 0.32, weights: { waves: 7, reef: 4, shoals: 3, kelp: 3, water_rocks: 0.8, whirlpool: 0.2, ice: 1, mist: 1 } },
+  inland_water: { chance: 0.28, weights: { waves: 5, shoals: 2, water_rocks: 0.8, marsh: 3, rapids: 0.8, ice: 1, mist: 2 } },
   beach: { chance: 0.35, weights: { ridges: 4, cliffs: 2, water_rocks: 2, mist: 1 } },
   plains: { chance: 0.35, weights: { woods: 3, shrub: 2, ridges: 2, farmland: 0.25, lone_mountain: 1, mist: 0.5 } },
   grassland: { chance: 0.45, weights: { woods: 4, forest: 2, shrub: 2, ridges: 3, farmland: 0.35, lone_mountain: 1, mist: 0.5 } },
@@ -1124,14 +1119,14 @@ const FEATURE_PROBABILITY_RULES = {
   deep_desert: { chance: 0.50, weights: { ridges: 5, cactus_scrub: 2, cliffs: 3, lone_mountain: 2, shrub: 1, mist: 0.25 } },
   barrens: { chance: 0.45, weights: { shrub: 3, ridges: 4, cliffs: 3, lone_mountain: 1, cactus_scrub: 1, mist: 0.5 } },
   bleak_barrens: { chance: 0.50, weights: { shrub: 2, ridges: 4, cliffs: 4, lone_mountain: 2, volcano: 1, mist: 1 } },
-  snow: { chance: 0.55, weights: { ridges: 3, mountains: 3, woods: 2, forest: 2, ice: 2, snowcap: 2, mist: 2 } },
+  snow: { chance: 0.55, weights: { ridges: 3, snowcapped_mountains: 4, woods: 2, forest: 2, ice: 2, snowcap: 1, mist: 2 } },
   rock: { chance: 0.75, weights: { mountains: 5, ridges: 4, cliffs: 3, lone_mountain: 2, woods: 2, forest: 1, snowcap: 1, volcano: 1, mist: 1 } },
   wastes: { chance: 0.50, weights: { ridges: 4, cliffs: 3, lone_mountain: 2, volcano: 2, mist: 1 } }
 };
 
 const SECONDARY_FEATURE_RULES = [
   { id: "mist", chance: 0.12, allowedBases: ["deep_sea", "sea", "coastal_water", "inland_water", "wetland", "jungle_floor", "lush_grassland", "rock", "snow"], maxChance: 0.25 },
-  { id: "snowcap", chance: 0.20, requiresAnyFeature: ["mountains", "lone_mountain"], allowedBases: ["rock", "snow"], maxChance: 0.40 },
+  { id: "snowcap", chance: 0.20, requiresAnyFeature: ["mountains", "snowcapped_mountains", "lone_mountain"], allowedBases: ["snow"], maxChance: 0.40 },
   { id: "woods", chance: 0.20, requiresAnyFeature: ["mountains", "ridges", "cliffs"], allowedBases: ["rock", "snow", "grassland", "lush_grassland"], maxChance: 0.35 },
   { id: "forest", chance: 0.12, requiresAnyFeature: ["mountains", "ridges"], allowedBases: ["rock", "snow", "lush_grassland"], maxChance: 0.25 },
   { id: "waves", chance: 0.25, allowedBases: ["deep_sea", "sea", "coastal_water"], suppressIfAnyFeature: ["ice", "whirlpool"] },
@@ -1144,7 +1139,8 @@ function weightedPickFeature(hex, rule, existingFeatures = []) {
     .filter(([featureId]) => !existing.has(featureId))
     .filter(([featureId]) => featureById[featureId]?.category !== "atmosphere")
     .filter(([featureId]) => featureById[featureId]?.category !== "accent")
-    .filter(([featureId]) => canFeatureAppearNaturally(hex, featureId, existingFeatures));
+    .filter(([featureId]) => canFeatureAppearNaturally(hex, featureId, existingFeatures))
+    .map(([featureId, weight]) => [featureId, contextualFeatureWeight(hex, featureId, weight)]);
 
   const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
   if (total <= 0) return null;
@@ -1158,6 +1154,49 @@ function weightedPickFeature(hex, rule, existingFeatures = []) {
   return entries[entries.length - 1]?.[0] || null;
 }
 
+function contextualFeatureWeight(hex, featureId, weight) {
+  let result = weight;
+
+  if (["woods", "forest"].includes(featureId)) {
+    const woodsNearby = nearbyFeatureCount(hex, "woods", 1);
+    const forestNearby = nearbyFeatureCount(hex, "forest", 1);
+    if (featureId === "woods") result *= 1 + woodsNearby * 0.65 + forestNearby * 0.45;
+    if (featureId === "forest") result *= 1 + forestNearby * 0.75 + woodsNearby * 0.25;
+  }
+
+  if (featureId === "jungle") {
+    result *= 1 + nearbyFeatureCount(hex, "jungle", 1) * 0.75;
+    if (hasNearbyBase(hex, new Set(["beach", "coastal_water"]), 2)) result *= 1.25;
+  }
+
+  if (featureId === "reef") {
+    if (hex.baseTerrain === "coastal_water" && hasNearbyBase(hex, new Set(["beach"]), 2)) result *= 2.2;
+    if (hex.baseTerrain === "sea") result *= 0.45;
+  }
+
+  if (featureId === "mountains") {
+    result *= hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains"], 2) ? 2.4 : 0.65;
+  }
+
+  if (featureId === "snowcapped_mountains") {
+    result *= hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains"], 2) ? 2.1 : 0.85;
+  }
+
+  if (featureId === "lone_mountain") {
+    result *= hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains"], 2) ? 1.8 : 0.2;
+  }
+
+  if (featureId === "ridges" && hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains", "lone_mountain"], 2)) {
+    result *= 1.8;
+  }
+
+  if (featureId === "waves" && hasNearbyFeature(hex, "whirlpool", 1)) {
+    result *= 2.5;
+  }
+
+  return result;
+}
+
 function hasNearbyPoiType(hex, poiTypes, radius = 2) {
   const validHexIds = new Set([hex.id, ...nearbyHexesWithin(hex, radius).map(neighbor => neighbor.id)]);
   return state.pois.some(poi => validHexIds.has(poi.hexId) && poiTypes.includes(poi.type));
@@ -1169,12 +1208,11 @@ function canFeatureAppearNaturally(hex, featureId, existingFeatures = []) {
 
   if (featureId === "ice") {
     return ["deep_sea", "sea", "coastal_water", "inland_water", "snow"].includes(base) &&
-      (base === "snow" || hasNearbyBase(hex, new Set(["snow"]), 2) || hasNearbyFeature(hex, "snowcap", 2) || hasNearbyFeature(hex, "ice", 2));
+      (base === "snow" || hasNearbyBase(hex, new Set(["snow"]), 2) || hasNearbyFeature(hex, "snowcap", 2) || hasNearbyFeature(hex, "snowcapped_mountains", 2) || hasNearbyFeature(hex, "ice", 2));
   }
 
   if (featureId === "falls") {
-    return base === "inland_water" &&
-      (hasNearbyBase(hex, new Set(["rock", "snow"]), 1) || hasNearbyAnyFeature(hex, ["mountains", "cliffs", "ridges"], 1));
+    return false;
   }
 
   if (featureId === "rapids") {
@@ -1184,13 +1222,14 @@ function canFeatureAppearNaturally(hex, featureId, existingFeatures = []) {
 
   if (featureId === "reef") {
     if (base === "coastal_water") return hasNearbyBase(hex, new Set(["beach"]), 2);
-    return base === "sea" && hasNearbyBase(hex, new Set(["beach", "coastal_water"]), 2) && rand() < 0.22;
+    return base === "sea" && hasNearbyBase(hex, new Set(["beach", "coastal_water"]), 2) && rand() < 0.16;
   }
   if (featureId === "kelp") return ["deep_sea", "sea", "coastal_water"].includes(base);
   if (featureId === "shoals") return ["coastal_water", "inland_water"].includes(base) || (base === "sea" && hasNearbyBase(hex, new Set(["coastal_water", "beach"]), 1));
   if (featureId === "water_rocks") return ["coastal_water", "inland_water"].includes(base) || hasNearbyBase(hex, new Set(["beach", "rock"]), 1) || hasNearbyFeature(hex, "cliffs", 1);
-  if (featureId === "whirlpool") return ["deep_sea", "sea", "coastal_water"].includes(base);
-  if (featureId === "snowcap") return existing.has("mountains") || existing.has("lone_mountain");
+  if (featureId === "whirlpool") return ["deep_sea", "sea", "coastal_water"].includes(base) && rand() < 0.35;
+  if (featureId === "snowcap") return base === "snow" && (existing.has("mountains") || existing.has("snowcapped_mountains") || existing.has("lone_mountain"));
+  if (featureId === "snowcapped_mountains") return base === "snow";
   if (featureId === "jungle") return ["jungle_floor", "wetland", "lush_grassland"].includes(base);
   if (featureId === "farmland") {
     if (!["plains", "grassland", "lush_grassland"].includes(base)) return false;
@@ -1199,7 +1238,7 @@ function canFeatureAppearNaturally(hex, featureId, existingFeatures = []) {
     return rand() < 0.06;
   }
   if (featureId === "lone_mountain") return ["plains", "grassland", "desert", "deep_desert", "barrens", "rock", "wastes"].includes(base) && hasNearbyAnyFeature(hex, ["mountains"], 2);
-  if (featureId === "mountains") return ["rock", "snow"].includes(base) && (hasNearbyAnyFeature(hex, ["mountains"], 2) || rand() < 0.45);
+  if (featureId === "mountains") return ["rock", "snow"].includes(base) && (hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains"], 2) || rand() < 0.45);
   if (featureId === "volcano") return ["rock", "wastes", "bleak_barrens"].includes(base);
 
   return true;
@@ -1291,10 +1330,10 @@ function tightenNaturalFeatureBlobs() {
       if (hex.features.includes("forest") || hex.features.includes("woods")) return;
       const forestNearby = nearbyFeatureCount(hex, "forest", 1);
       const woodsNearby = nearbyFeatureCount(hex, "woods", 1);
-      if (forestNearby >= 2 && rand() < 0.50) {
-        addNaturalFeature(hex, "woods");
-      } else if (woodsNearby >= 2 && rand() < 0.32) {
-        addNaturalFeature(hex, rand() < 0.35 ? "forest" : "woods");
+      if (forestNearby >= 2 && rand() < 0.58) {
+        addNaturalFeature(hex, rand() < 0.72 ? "woods" : "forest");
+      } else if (woodsNearby >= 2 && rand() < 0.42) {
+        addNaturalFeature(hex, rand() < 0.24 ? "forest" : "woods");
       }
     });
 
@@ -1302,6 +1341,19 @@ function tightenNaturalFeatureBlobs() {
       if (hex.features.includes("jungle")) return;
       if (nearbyFeatureCount(hex, "jungle", 1) >= 2 && rand() < 0.50) {
         addNaturalFeature(hex, "jungle");
+      }
+    });
+
+    Object.values(state.hexes).forEach(hex => {
+      if (hex.features.includes("ridges") || hex.features.includes("mountains") || hex.features.includes("snowcapped_mountains")) return;
+      if (!["plains", "grassland", "lush_grassland", "desert", "deep_desert", "barrens", "bleak_barrens", "rock", "snow", "wastes"].includes(hex.baseTerrain)) return;
+
+      const nearRange = hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains", "volcano"], 1);
+      const nearRangeOuter = hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains", "volcano"], 2);
+      if (nearRange && rand() < 0.34) {
+        addNaturalFeature(hex, "ridges");
+      } else if (nearRangeOuter && rand() < 0.13) {
+        addNaturalFeature(hex, "ridges");
       }
     });
   }
@@ -1382,20 +1434,26 @@ function growBlob(seedHex, size, baseTerrain, options = {}) {
 function growChain(seedHex, length, baseTerrain) {
   let current = seedHex;
   let previous = null;
+  let direction = Math.floor(rand() * 6);
 
   for (let i = 0; i < length && current; i++) {
     current.baseTerrain = baseTerrain;
-    const neighbors = getNeighborHexes(current).filter(n => !previous || n.id !== previous.id);
+    const orderedNeighbors = getNeighborHexes(current);
+    const neighbors = orderedNeighbors.filter(n => !previous || n.id !== previous.id);
     if (!neighbors.length) break;
 
-    // Slightly prefer forward-ish continuation by occasionally keeping same general neighborhood.
-    const next = neighbors[Math.floor(rand() * neighbors.length)];
+    if (rand() < 0.34) direction = (direction + randomItem([-1, 0, 1]) + 6) % 6;
+    const preferred = [direction, (direction + 1) % 6, (direction + 5) % 6]
+      .map(index => orderedNeighbors[index])
+      .filter(neighbor => neighbor && (!previous || neighbor.id !== previous.id));
+    const next = preferred.length && rand() < 0.72
+      ? randomItem(preferred)
+      : neighbors[Math.floor(rand() * neighbors.length)];
     previous = current;
     current = next;
 
-    // Add some shoulder terrain around the chain.
     getNeighborHexes(previous).forEach(n => {
-      if (rand() < 0.24 && ["plains", "grassland", "lush_grassland"].includes(n.baseTerrain)) {
+      if (rand() < 0.26 && ["plains", "grassland", "lush_grassland", "barrens", "desert"].includes(n.baseTerrain)) {
         n.baseTerrain = "rock";
       }
     });
@@ -1506,6 +1564,10 @@ function applyCoastlineCleanup() {
       return;
     }
 
+    if (hex.baseTerrain === "snow" && touchesOcean) {
+      return;
+    }
+
     if (!isWaterBase(hex.baseTerrain) && hex.baseTerrain !== "beach" && touchesOcean) {
       if (rand() < 0.70) updates.push([hex.id, "beach"]);
       return;
@@ -1519,6 +1581,158 @@ function applyCoastlineCleanup() {
   updates.forEach(([id, baseTerrain]) => {
     state.hexes[id].baseTerrain = baseTerrain;
   });
+
+  normalizeOceanDepths();
+}
+
+const BAD_TERRAIN_ADJACENCY_RULES = [
+  { a: "snow", b: "jungle_floor", replaceA: "rock", replaceB: "lush_grassland" },
+  { a: "snow", b: "deep_desert", replaceA: "rock", replaceB: "barrens" },
+  { a: "jungle_floor", b: "bleak_barrens", replaceA: "lush_grassland", replaceB: "barrens" },
+  { a: "jungle_floor", b: "barrens", replaceA: "lush_grassland", replaceB: "grassland" },
+  { a: "jungle_floor", b: "deep_desert", replaceA: "lush_grassland", replaceB: "desert" },
+  { a: "wetland", b: "deep_desert", replaceA: "grassland", replaceB: "desert" },
+  { a: "wastes", b: "lush_grassland", replaceA: "barrens", replaceB: "grassland" },
+  { a: "wastes", b: "wetland", replaceA: "barrens", replaceB: "grassland" }
+];
+
+const TERRAIN_ADJACENCY_PROFILES = {
+  deep_sea: { climate: 0, moisture: 3, elevation: -2, group: "water" },
+  sea: { climate: 0, moisture: 3, elevation: -1, group: "water" },
+  coastal_water: { climate: 0, moisture: 3, elevation: -1, group: "coast" },
+  inland_water: { climate: 0, moisture: 3, elevation: -1, group: "freshwater" },
+  beach: { climate: 0, moisture: 1, elevation: 0, group: "coast" },
+  plains: { climate: 0, moisture: 0, elevation: 0, group: "fertile" },
+  grassland: { climate: 0, moisture: 0, elevation: 0, group: "fertile" },
+  lush_grassland: { climate: 1, moisture: 1, elevation: 0, group: "fertile" },
+  wetland: { climate: 1, moisture: 2, elevation: 0, group: "wet" },
+  jungle_floor: { climate: 2, moisture: 2, elevation: 0, group: "tropical" },
+  desert: { climate: 1, moisture: -1, elevation: 0, group: "arid" },
+  deep_desert: { climate: 1, moisture: -2, elevation: 0, group: "arid" },
+  barrens: { climate: 0, moisture: -1, elevation: 0, group: "dry" },
+  bleak_barrens: { climate: -1, moisture: -1, elevation: 1, group: "dry" },
+  snow: { climate: -2, moisture: -1, elevation: 2, group: "cold" },
+  rock: { climate: -1, moisture: -1, elevation: 2, group: "highland" },
+  wastes: { climate: 0, moisture: -2, elevation: 1, group: "waste" }
+};
+
+function replacementForBadTerrainNeighbor(baseTerrain, neighborBaseTerrain) {
+  const rule = BAD_TERRAIN_ADJACENCY_RULES.find(entry =>
+    (entry.a === baseTerrain && entry.b === neighborBaseTerrain) ||
+    (entry.b === baseTerrain && entry.a === neighborBaseTerrain)
+  );
+
+  if (!rule) return null;
+  return rule.a === baseTerrain ? rule.replaceA : rule.replaceB;
+}
+
+function terrainAdjacencyScore(baseTerrain, neighborBaseTerrain) {
+  if (baseTerrain === neighborBaseTerrain) return 0;
+  if ((baseTerrain === "snow" && neighborBaseTerrain === "beach") || (baseTerrain === "beach" && neighborBaseTerrain === "snow")) return 1;
+
+  const profile = TERRAIN_ADJACENCY_PROFILES[baseTerrain];
+  const neighborProfile = TERRAIN_ADJACENCY_PROFILES[neighborBaseTerrain];
+  if (!profile || !neighborProfile) return 0;
+
+  let score =
+    Math.abs(profile.climate - neighborProfile.climate) +
+    Math.abs(profile.moisture - neighborProfile.moisture) +
+    Math.abs(profile.elevation - neighborProfile.elevation);
+
+  const waterGroups = new Set(["water", "coast", "freshwater"]);
+  if (waterGroups.has(profile.group) !== waterGroups.has(neighborProfile.group)) {
+    score += profile.group === "coast" || neighborProfile.group === "coast" ? 1 : 2;
+  }
+
+  if (
+    (profile.group === "tropical" && ["dry", "arid", "waste", "cold"].includes(neighborProfile.group)) ||
+    (neighborProfile.group === "tropical" && ["dry", "arid", "waste", "cold"].includes(profile.group))
+  ) {
+    score += 2;
+  }
+
+  if (
+    (profile.group === "wet" && ["arid", "waste"].includes(neighborProfile.group)) ||
+    (neighborProfile.group === "wet" && ["arid", "waste"].includes(profile.group))
+  ) {
+    score += 2;
+  }
+
+  return score;
+}
+
+function transitionTerrainForClash(baseTerrain, neighborBaseTerrain) {
+  const profile = TERRAIN_ADJACENCY_PROFILES[baseTerrain];
+  const neighborProfile = TERRAIN_ADJACENCY_PROFILES[neighborBaseTerrain];
+  if (!profile || !neighborProfile) return null;
+
+  if (isOceanWaterBase(baseTerrain) && isLandBase(neighborBaseTerrain)) return "coastal_water";
+  if (baseTerrain === "beach" && !isWaterBase(neighborBaseTerrain)) return rand() < 0.5 ? "plains" : "grassland";
+  if (baseTerrain === "snow" && isOceanWaterBase(neighborBaseTerrain)) return null;
+
+  if (profile.group === "cold" && neighborProfile.group === "tropical") return rand() < 0.55 ? "rock" : "grassland";
+  if (profile.group === "cold" && neighborProfile.group === "arid") return rand() < 0.55 ? "rock" : "barrens";
+  if (profile.group === "tropical" && neighborProfile.climate < 0) return "lush_grassland";
+  if (profile.group === "tropical" && neighborProfile.moisture < 0) return "lush_grassland";
+  if (profile.group === "wet" && neighborProfile.moisture < -1) return "grassland";
+  if (profile.group === "arid" && neighborProfile.moisture > 1) return baseTerrain === "deep_desert" ? "desert" : "plains";
+  if (profile.group === "waste" && neighborProfile.moisture > 0) return "barrens";
+  if (profile.group === "fertile" && neighborProfile.group === "waste") return "grassland";
+  if (profile.group === "highland" && neighborProfile.group === "water") return "coastal_water";
+
+  if (
+    profile.group !== "cold" &&
+    neighborProfile.group !== "cold" &&
+    Math.abs(profile.elevation - neighborProfile.elevation) >= 2 &&
+    isLandBase(baseTerrain) &&
+    isLandBase(neighborBaseTerrain)
+  ) {
+    return profile.elevation > neighborProfile.elevation ? "rock" : "barrens";
+  }
+
+  return null;
+}
+
+function applyBadAdjacencyCleanup(passes = 2) {
+  for (let pass = 0; pass < passes; pass++) {
+    const updates = new Map();
+
+    Object.values(state.hexes).forEach(hex => {
+      const neighbors = getNeighborHexes(hex);
+
+      if (hex.baseTerrain === "beach" && !neighbors.some(neighbor => isWaterBase(neighbor.baseTerrain))) {
+        updates.set(hex.id, rand() < 0.65 ? "plains" : "grassland");
+        return;
+      }
+
+      neighbors.forEach(neighbor => {
+        if (hex.id > neighbor.id) return;
+
+        if (hex.baseTerrain === "deep_sea" && isLandBase(neighbor.baseTerrain)) {
+          updates.set(hex.id, "sea");
+        } else if (neighbor.baseTerrain === "deep_sea" && isLandBase(hex.baseTerrain)) {
+          updates.set(neighbor.id, "sea");
+        }
+
+        const hexReplacement = replacementForBadTerrainNeighbor(hex.baseTerrain, neighbor.baseTerrain);
+        const neighborReplacement = replacementForBadTerrainNeighbor(neighbor.baseTerrain, hex.baseTerrain);
+        if (hexReplacement) updates.set(hex.id, hexReplacement);
+        if (neighborReplacement) updates.set(neighbor.id, neighborReplacement);
+
+        if (!hexReplacement && !neighborReplacement && terrainAdjacencyScore(hex.baseTerrain, neighbor.baseTerrain) >= 5 && rand() < 0.62) {
+          const hexTransition = transitionTerrainForClash(hex.baseTerrain, neighbor.baseTerrain);
+          const neighborTransition = transitionTerrainForClash(neighbor.baseTerrain, hex.baseTerrain);
+          if (hexTransition) updates.set(hex.id, hexTransition);
+          if (neighborTransition) updates.set(neighbor.id, neighborTransition);
+        }
+      });
+    });
+
+    if (!updates.size) break;
+    updates.forEach((baseTerrain, id) => {
+      state.hexes[id].baseTerrain = baseTerrain;
+    });
+  }
 
   normalizeOceanDepths();
 }
@@ -1538,9 +1752,9 @@ function assignNaturalElevations() {
 
   Object.values(state.hexes).forEach(hex => {
     if (hex.features.includes("mountains") || hex.features.includes("volcano")) return;
-    const mountainDistance = hasNearbyAnyFeature(hex, ["mountains", "volcano"], 1)
+    const mountainDistance = hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains", "volcano"], 1)
       ? 1
-      : hasNearbyAnyFeature(hex, ["mountains", "volcano"], 2)
+      : hasNearbyAnyFeature(hex, ["mountains", "snowcapped_mountains", "volcano"], 2)
         ? 2
         : null;
     if (!mountainDistance || !isLandBase(hex.baseTerrain)) return;
@@ -1641,13 +1855,24 @@ function randomizeNaturalMap() {
   }
 
   // Mountain chains.
-  const mountainCount = scaledCount(Math.max(1, Math.floor(allHexes.length / 700)), bias.mountain, bias.mountain > 0 ? 1 : 0);
+  const mountainCount = scaledCount(Math.max(1, Math.floor(allHexes.length / 450)), bias.mountain, bias.mountain > 0 ? 1 : 0);
   for (let i = 0; i < mountainCount; i++) {
     growChain(
       randomHexFrom(allHexes),
-      Math.floor((6 + rand() * 10) * Math.max(0.35, bias.mountain)),
+      Math.floor((9 + rand() * 14) * Math.max(0.35, bias.mountain)),
       "rock"
     );
+  }
+
+  if (bias.mountain > 1.2) {
+    const extraRockBlobs = scaledCount(Math.floor(allHexes.length / 900), bias.mountain - 1, 0);
+    for (let i = 0; i < extraRockBlobs; i++) {
+      growBlob(
+        randomHexFrom(allHexes),
+        Math.floor(allHexes.length * (0.01 + rand() * 0.012) * (bias.mountain - 1)),
+        "rock"
+      );
+    }
   }
 
   // Snow pockets.
@@ -1662,6 +1887,8 @@ function randomizeNaturalMap() {
 
   smoothBaseTerrains(2);
   applyCoastlineCleanup();
+  applyCoastlineCleanup();
+  applyBadAdjacencyCleanup(2);
   applyCoastlineCleanup();
   assignNaturalFeatures();
   assignNaturalElevations();
@@ -1987,11 +2214,11 @@ function shouldRenderHitPolygons() {
 }
 
 function shouldRenderTerrainLabels() {
-  return state.showTerrainLabels && (!isLargeMap() || viewState.zoom >= TERRAIN_LABEL_MIN_ZOOM);
+  return state.showTerrainLabels && viewState.zoom >= TERRAIN_LABEL_MIN_ZOOM;
 }
 
 function shouldRenderCoordLabels() {
-  return state.showCoordLabels && (!isLargeMap() || viewState.zoom >= COORD_LABEL_MIN_ZOOM);
+  return state.showCoordLabels && viewState.zoom >= COORD_LABEL_MIN_ZOOM;
 }
 
 function getVisibleBounds(buffer = HEX_RADIUS * 2) {
@@ -2414,6 +2641,87 @@ function segmentPath(segment) {
   return `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
 }
 
+function pathPointForHexId(hexId) {
+  const hex = state.hexes[hexId];
+  return hex ? getHexGeometry(hex).center : null;
+}
+
+function buildSegmentGraph(segments) {
+  const graph = new Map();
+  segments.forEach(segment => {
+    if (!state.hexes[segment.from] || !state.hexes[segment.to]) return;
+    if (!graph.has(segment.from)) graph.set(segment.from, new Set());
+    if (!graph.has(segment.to)) graph.set(segment.to, new Set());
+    graph.get(segment.from).add(segment.to);
+    graph.get(segment.to).add(segment.from);
+  });
+  return graph;
+}
+
+function edgeVisitKey(a, b) {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+function tracePathChain(start, next, graph, visited) {
+  const chain = [start, next];
+  visited.add(edgeVisitKey(start, next));
+
+  let previous = start;
+  let current = next;
+
+  while ((graph.get(current)?.size || 0) === 2) {
+    const onward = [...graph.get(current)].find(hexId => hexId !== previous);
+    if (!onward || visited.has(edgeVisitKey(current, onward))) break;
+    chain.push(onward);
+    visited.add(edgeVisitKey(current, onward));
+    previous = current;
+    current = onward;
+  }
+
+  return chain;
+}
+
+function pathForPointChain(chain) {
+  const points = chain.map(pathPointForHexId).filter(Boolean);
+  if (points.length < 2) return "";
+  if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+
+  const commands = [`M ${points[0].x} ${points[0].y}`];
+  for (let i = 1; i < points.length - 1; i++) {
+    const current = points[i];
+    const next = points[i + 1];
+    const mid = {
+      x: (current.x + next.x) / 2,
+      y: (current.y + next.y) / 2
+    };
+    commands.push(`Q ${current.x} ${current.y} ${mid.x} ${mid.y}`);
+  }
+  const last = points[points.length - 1];
+  commands.push(`T ${last.x} ${last.y}`);
+  return commands.join(" ");
+}
+
+function connectedPathStrings(segments) {
+  const graph = buildSegmentGraph(segments);
+  const visited = new Set();
+  const paths = [];
+
+  const starts = [...graph.keys()].filter(hexId => (graph.get(hexId)?.size || 0) !== 2);
+  starts.forEach(start => {
+    [...graph.get(start)].forEach(next => {
+      if (visited.has(edgeVisitKey(start, next))) return;
+      paths.push(pathForPointChain(tracePathChain(start, next, graph, visited)));
+    });
+  });
+
+  segments.forEach(segment => {
+    if (visited.has(edgeVisitKey(segment.from, segment.to))) return;
+    paths.push(pathForPointChain(tracePathChain(segment.from, segment.to, graph, visited)));
+  });
+
+  return paths.filter(Boolean);
+}
+
 function renderTerrainControls() {
   const baseContainer = document.getElementById("base-terrain-list");
   const featureContainer = document.getElementById("terrain-feature-list");
@@ -2512,6 +2820,7 @@ const FEATURE_ART_FILES = {
   marsh: "marsh.svg",
   mist: "mist.svg",
   mountains: "mountains.svg",
+  snowcapped_mountains: "mountains_snow.svg",
   mountains_snow: "mountains_snow.svg",
   rapids: "rapids.svg",
   ridges: "ridges.svg",
@@ -2536,12 +2845,15 @@ const FEATURE_LAYER_BY_ID = {
   water_rocks: 35,
   lone_mountain: 40,
   mountains: 40,
+  snowcapped_mountains: 40,
   volcano: 45,
-  shrub: 50,
-  cactus_scrub: 50,
-  woods: 50,
-  forest: 50,
-  jungle: 50,
+  shrub: 80,
+  cactus_scrub: 80,
+  woods: 80,
+  forest: 80,
+  jungle: 80,
+  marsh: 80,
+  kelp: 60,
   rapids: 60,
   falls: 60,
   whirlpool: 60,
@@ -2698,9 +3010,9 @@ function chooseJungleArt(hex) {
     return pickStableWeighted(hex, "jungle", [["jungle_trop_1.svg", 3], ["jungle_trop_2.svg", 2], ["jungle_temp_1.svg", 1]]);
   }
   if (nearbyCold || nearbyRock) {
-    return pickStableWeighted(hex, "jungle", [["jungle_temp_1.svg", 3], ["jungle_temp_2.svg", 2], ["jungle_trop_1.svg", 1]]);
+    return pickStableWeighted(hex, "jungle", [["jungle_temp_1.svg", 4], ["jungle_temp_2.svg", 2]]);
   }
-  return pickStableWeighted(hex, "jungle", [["jungle_temp_1.svg", 2], ["jungle_temp_2.svg", 1], ["jungle_trop_1.svg", 2], ["jungle_trop_2.svg", 1]]);
+  return pickStableWeighted(hex, "jungle", [["jungle_temp_1.svg", 3], ["jungle_temp_2.svg", 2], ["jungle_trop_1.svg", 1]]);
 }
 
 function chooseFeatureArtFile(hex, featureId, features) {
@@ -2739,7 +3051,8 @@ function chooseFeatureArtFile(hex, featureId, features) {
   if (featureId === "marsh") return ["wetland", "inland_water", "lush_grassland"].includes(base) ? FEATURE_ART_FILES.marsh : null;
   if (featureId === "ridges") return LAND_BASES.has(base) && !WATER_BASES.has(base) ? FEATURE_ART_FILES.ridges : null;
   if (featureId === "cliffs") return ["beach", "desert", "deep_desert", "barrens", "bleak_barrens", "rock", "wastes"].includes(base) ? FEATURE_ART_FILES.cliffs : null;
-  if (featureId === "mountains") return ["rock", "snow"].includes(base) ? (features.has("snowcap") ? FEATURE_ART_FILES.mountains_snow : FEATURE_ART_FILES.mountains) : null;
+  if (featureId === "snowcapped_mountains") return base === "snow" ? FEATURE_ART_FILES.snowcapped_mountains : null;
+  if (featureId === "mountains") return ["rock", "snow"].includes(base) ? (base === "snow" || features.has("snowcap") ? FEATURE_ART_FILES.mountains_snow : FEATURE_ART_FILES.mountains) : null;
   if (featureId === "snowcap") return null;
   if (featureId === "lone_mountain") return ["plains", "grassland", "desert", "deep_desert", "barrens", "rock", "wastes"].includes(base) ? FEATURE_ART_FILES.lone_mountain : null;
   if (featureId === "volcano") return ["rock", "wastes", "bleak_barrens"].includes(base) ? FEATURE_ART_FILES.volcano : null;
@@ -2757,9 +3070,9 @@ function getFeatureArtStack(hex) {
   const features = new Set(hex.features || []);
   const stack = [];
   const hasVegetation = ["jungle", "forest", "woods", "shrub", "cactus_scrub"].some(feature => features.has(feature));
-  const hasStructure = ["volcano", "mountains", "lone_mountain", "cliffs", "ridges"].some(feature => features.has(feature));
+  const hasStructure = ["volcano", "snowcapped_mountains", "mountains", "lone_mountain", "cliffs", "ridges"].some(feature => features.has(feature));
 
-  const structurePriority = ["volcano", "mountains", "lone_mountain", "cliffs", "ridges"];
+  const structurePriority = ["volcano", "snowcapped_mountains", "mountains", "lone_mountain", "cliffs", "ridges"];
   const structure = structurePriority.find(feature => features.has(feature));
   if (structure) stack.push({ featureId: structure, layer: FEATURE_LAYER_BY_ID[structure] });
 
@@ -2798,9 +3111,17 @@ function getFeatureArtTint(hex, item) {
   const tints = BASE_FEATURE_TINTS[base] || BASE_FEATURE_TINTS.plains;
   const featureId = item.featureId;
   const file = item.file || "";
+  const isVegetation = ["woods", "forest", "jungle", "shrub", "cactus_scrub", "marsh"].includes(featureId);
+  const isRelief = ["mountains", "snowcapped_mountains", "lone_mountain", "cliffs", "ridges", "snowcap", "volcano"].includes(featureId);
 
   if (featureId === "mist") return "#f0f0e8";
   if (featureId === "ice") return base === "snow" ? "#5f8fa4" : "#d8eef2";
+  if (featureId === "marsh") return "#8b6f3d";
+  if (["barrens", "bleak_barrens"].includes(base) && isRelief) return "#b88a62";
+  if (["barrens", "bleak_barrens"].includes(base) && ["shrub", "cactus_scrub"].includes(featureId)) return "#958a57";
+  if (base === "wastes" && isRelief) return "#8f6a5f";
+  if (featureId === "jungle") return "#519942";
+  if (["wetland", "jungle_floor"].includes(base) && isVegetation) return base === "jungle_floor" ? "#63a56d" : "#5d9380";
   if (featureId === "volcano") return "#2b2020";
   if (featureId === "kelp") return "#1f5a45";
   if (featureId === "reef") return "#7b5a4a";
@@ -2810,11 +3131,11 @@ function getFeatureArtTint(hex, item) {
   if (file.includes("_con")) return base === "wetland" ? "#234d43" : "#203f35";
   if (file.includes("_dec")) return tints.vegetation;
 
-  if (["woods", "forest", "jungle", "shrub", "cactus_scrub", "marsh"].includes(featureId)) {
+  if (isVegetation) {
     return tints.vegetation;
   }
 
-  if (["mountains", "lone_mountain", "cliffs", "ridges", "snowcap"].includes(featureId)) {
+  if (isRelief) {
     return tints.relief;
   }
 
@@ -2828,6 +3149,9 @@ function getFeatureArtTint(hex, item) {
 }
 
 function getFeatureArtOpacity(hex, item, zoomOpacity) {
+  const waterFeatures = new Set(["waves", "shoals", "reef", "kelp", "water_rocks", "rapids", "falls", "whirlpool", "ice"]);
+  if (!waterFeatures.has(item.featureId) && item.featureId !== "mist") return 1;
+
   let opacity = item.opacity * zoomOpacity;
   if (item.featureId === "mist") return Math.min(0.24, opacity);
 
@@ -2844,7 +3168,7 @@ function getFeatureArtImage(file, tint) {
   const asset = FEATURE_ART_CACHE.get(file);
   if (!asset) return null;
 
-  const cacheKey = `${file}|${tint}`;
+  const cacheKey = `${file}|${tint}|${FEATURE_IMAGE_SUPERSAMPLE}`;
   const cached = FEATURE_ART_IMAGE_CACHE.get(cacheKey);
   if (cached?.loaded) return cached.image;
   if (cached) return null;
@@ -2853,7 +3177,17 @@ function getFeatureArtImage(file, tint) {
   FEATURE_ART_IMAGE_CACHE.set(cacheKey, { image, loaded: false });
   image.onload = () => {
     const entry = FEATURE_ART_IMAGE_CACHE.get(cacheKey);
-    if (entry) entry.loaded = true;
+    if (entry) {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.ceil(asset.width * FEATURE_IMAGE_SUPERSAMPLE));
+      canvas.height = Math.max(1, Math.ceil(asset.height * FEATURE_IMAGE_SUPERSAMPLE));
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      entry.image = canvas;
+      entry.loaded = true;
+    }
     requestTerrainCanvasRefresh();
   };
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
@@ -2879,8 +3213,8 @@ function getFeatureArtZoomOpacity() {
 function featureArtDrawBox(hex, index) {
   const center = getHexGeometry(hex).center;
   const zoomScale = getFeatureArtZoomScale();
-  const size = (index === 0 ? 82 : 64) * zoomScale;
-  const offsetY = (index === 0 ? -40 : -29 + index * 8) * zoomScale;
+  const size = (index === 0 ? 94 : 74) * zoomScale;
+  const offsetY = (index === 0 ? -46 : -34 + index * 8) * zoomScale;
   return {
     x: center.x - size / 2,
     y: center.y + offsetY,
@@ -2889,20 +3223,31 @@ function featureArtDrawBox(hex, index) {
   };
 }
 
+function getFeatureArtSizeMultiplier(featureId) {
+  return ["mountains", "snowcapped_mountains", "lone_mountain", "volcano", "marsh"].includes(featureId) ? 0.9 : 1;
+}
+
+function applyFeatureArtSizeMultiplier(box, featureId) {
+  const multiplier = getFeatureArtSizeMultiplier(featureId);
+  if (multiplier === 1) return box;
+  const width = box.width * multiplier;
+  const height = box.height * multiplier;
+  return {
+    x: box.x + (box.width - width) / 2,
+    y: box.y + (box.height - height) / 2,
+    width,
+    height
+  };
+}
+
 function renderCanvasFeatureArtForHex(hex, drawImage) {
-  let stack = getFeatureArtStack(hex);
-  const simplified = viewState.zoom < FEATURE_ART_FULL_ZOOM;
-  if (simplified) {
-    stack = stack
-      .filter(item => item.featureId !== "mist")
-      .slice(0, 1);
-  }
+  const stack = getFeatureArtStack(hex);
   const zoomOpacity = getFeatureArtZoomOpacity();
 
   stack.forEach((item, index) => {
     const image = getFeatureArtImage(item.file, getFeatureArtTint(hex, item));
     if (!image) return;
-    drawImage(image, featureArtDrawBox(hex, index), getFeatureArtOpacity(hex, item, zoomOpacity));
+    drawImage(image, applyFeatureArtSizeMultiplier(featureArtDrawBox(hex, index), item.featureId), getFeatureArtOpacity(hex, item, zoomOpacity));
   });
 }
 
@@ -2922,12 +3267,16 @@ function renderCanvasPaintPreview() {
 
 function parseFeatureSvg(text) {
   const viewBoxMatch = text.match(/\bviewBox=["']([^"']+)["']/i);
+  const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 384 333";
+  const values = viewBox.split(/\s+/).map(Number);
   const bodyMatch = text.match(/<svg\b[^>]*>([\s\S]*?)<\/svg>/i);
   const wrapper = svgElement("svg");
   wrapper.innerHTML = bodyMatch ? bodyMatch[1] : text;
   applyFeatureArtTint(wrapper, "currentColor");
   return {
-    viewBox: viewBoxMatch ? viewBoxMatch[1] : "0 0 384 333",
+    viewBox,
+    width: Number.isFinite(values[2]) && values[2] > 0 ? values[2] : 384,
+    height: Number.isFinite(values[3]) && values[3] > 0 ? values[3] : 333,
     body: wrapper.innerHTML
   };
 }
@@ -3155,7 +3504,12 @@ function render() {
       }
 
       if (renderCoordLabels) {
-        const coordLabel = svgElement("text", { x: center.x, y: center.y + 9, class: "coord-label" });
+        const coordLabel = svgElement("text", {
+          x: center.x,
+          y: center.y - HEX_HEIGHT * 0.28,
+          class: "coord-label",
+          "font-size": String(HEX_RADIUS * 0.20)
+        });
         coordLabel.textContent = hex.worldId;
         labelFragment.appendChild(coordLabel);
       }
@@ -3163,13 +3517,13 @@ function render() {
   }
 
   if (renderMapDetails) {
-    state.roads.filter(road => segmentInBounds(road, visibleBounds)).forEach(road => {
-      const path = svgElement("path", { d: segmentPath(road), class: "road" });
+    connectedPathStrings(state.roads.filter(road => segmentInBounds(road, visibleBounds))).forEach(pathData => {
+      const path = svgElement("path", { d: pathData, class: "road" });
       fragment.appendChild(path);
     });
 
-    state.rivers.filter(river => segmentInBounds(river, visibleBounds)).forEach(river => {
-      const path = svgElement("path", { d: segmentPath(river), class: "river" });
+    connectedPathStrings(state.rivers.filter(river => segmentInBounds(river, visibleBounds))).forEach(pathData => {
+      const path = svgElement("path", { d: pathData, class: "river" });
       fragment.appendChild(path);
     });
 
@@ -3442,17 +3796,24 @@ document.getElementById("import-csv-file").addEventListener("change", event => {
   if (file) importCsv(file);
 });
 
-document.getElementById("small-grid-button").addEventListener("click", () => {
+document.getElementById("medium-grid-button").addEventListener("click", () => {
   WORLD_ORIGIN_X = 0;
   WORLD_ORIGIN_Y = 0;
-  initHexes(12, 12, true);
+  setNewNaturalSeed();
+  initHexes(20, 20, false);
+  randomizeNaturalMap();
+  setTool("inspect");
   updateUndoButton();
 });
 
 document.getElementById("large-grid-button").addEventListener("click", () => {
   WORLD_ORIGIN_X = 0;
   WORLD_ORIGIN_Y = 0;
+  setNewNaturalSeed();
   initHexes(50, 50, false);
+  randomizeNaturalMap();
+  setTool("inspect");
+  updateUndoButton();
 });
 
 const undoButton = document.getElementById("undo-button");
@@ -3504,7 +3865,9 @@ document.getElementById("new-seed-button").addEventListener("click", () => {
 });
 
 setNewNaturalSeed();
-initHexes(12, 12, true);
+initHexes(20, 20, false);
+randomizeNaturalMap();
+setTool("inspect");
 updateUndoButton();
 renderTerrainControls();
 renderPoiControls();
